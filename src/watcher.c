@@ -4,12 +4,16 @@
 
 void clear_screen() { printf("\033[2J\033[H"); }
 
+void print_bar(double percent, int width) {
+  int filled = (int)(percent * width / 100.0);
+  for (int i = 0; i < width; i++)
+    putchar(i < filled ? '#' : '-');
+}
+
 double get_cpu_usage() {
   char buffer[1024];
   static unsigned long long prev_total, prev_idle;
   unsigned long long user, nice, system, idle, total, total_diff, idle_diff;
-
-  double cpu_usage = 0.0;
 
   FILE *file = fopen("/proc/stat", "r");
   if (!file)
@@ -40,14 +44,48 @@ double get_cpu_usage() {
   return ((double)(total_diff - idle_diff) / total_diff) * 100.0;
 }
 
+int get_ram_usage(double *total, double *used) {
+  struct sysinfo info;
+
+  if (sysinfo(&info) != 0)
+    return -1;
+
+  *total = (double)info.totalram * info.mem_unit / (1024 * 1024 * 1024);
+  *used = (double)(info.totalram - info.freeram) * info.mem_unit /
+          (1024 * 1024 * 1024);
+
+  return 0;
+}
+
 int main() {
-  clear_screen();
-  printf("System Monitor - Press Ctrl+C to exit\n");
-  printf("====================================\n\n");
-  for (int i = 0; i < 10; i++) {
-    double cpu_usage = get_cpu_usage();
-    printf("CPU Usage: %.1f%%", cpu_usage);
-    printf("----------------------------------------------------------\n");
+  double total, used;
+
+  get_cpu_usage();
+  sleep(1);
+
+  while (1) {
+    double cpu = get_cpu_usage();
+    int ram_ok = get_ram_usage(&total, &used);
+
+    clear_screen();
+    printf("System Monitor - Press Ctrl+C to exit\n");
+    printf("====================================\n\n");
+
+    printf("CPU Usage: %5.1f%% [", cpu);
+    print_bar(cpu, 20);
+    printf("]\n");
+
+    if (ram_ok == 0) {
+      double ram = used / total * 100.0;
+      printf("RAM Usage: %5.1f%% [", ram);
+      print_bar(ram, 20);
+      printf("]\n");
+      printf("RAM Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n\n", total,
+             used, total - used);
+    } else {
+      printf("RAM Usage: unavailable\n\n");
+    }
+
     sleep(1);
   }
   return 0;
