@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <sys/sysinfo.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 void clear_screen() { printf("\033[2J\033[H"); }
@@ -45,20 +45,45 @@ double get_cpu_usage() {
 }
 
 int get_ram_usage(double *total, double *used) {
-  struct sysinfo info;
-
-  if (sysinfo(&info) != 0)
+  FILE *file = fopen("/proc/meminfo", "r");
+  if (!file)
     return -1;
 
-  *total = (double)info.totalram * info.mem_unit / (1024 * 1024 * 1024);
-  *used = (double)(info.totalram - info.freeram) * info.mem_unit /
+  char line[128];
+  unsigned long long mem_total = 0, mem_available = 0;
+
+  while (fgets(line, sizeof(line), file)) {
+    if (sscanf(line, "MemTotal: %llu kB", &mem_total) == 1)
+      continue;
+    if (sscanf(line, "MemAvailable: %llu kB", &mem_available) == 1)
+      continue;
+  }
+  fclose(file);
+
+  if (mem_total == 0 || mem_available == 0)
+    return -1;
+
+  *total = (double)mem_total / (1024 * 1024);
+  *used = (double)(mem_total - mem_available) / (1024 * 1024);
+
+  return 0;
+}
+
+int get_disk_usage(const char *path, double *total, double *used) {
+  struct statvfs stat;
+
+  if (statvfs(path, &stat) != 0)
+    return -1;
+
+  *total = (double)stat.f_blocks * stat.f_frsize / (1024 * 1024 * 1024);
+  *used = (double)(stat.f_blocks - stat.f_bavail) * stat.f_frsize /
           (1024 * 1024 * 1024);
 
   return 0;
 }
 
 int main() {
-  double total, used;
+  double total, used, disk_total, disk_used;
 
   get_cpu_usage();
   sleep(1);
@@ -66,6 +91,7 @@ int main() {
   while (1) {
     double cpu = get_cpu_usage();
     int ram_ok = get_ram_usage(&total, &used);
+    int disk_ok = get_disk_usage(".", &disk_total, &disk_used);
 
     clear_screen();
     printf("System Monitor - Press Ctrl+C to exit\n");
@@ -80,12 +106,25 @@ int main() {
       printf("RAM Usage: %5.1f%% [", ram);
       print_bar(ram, 20);
       printf("]\n");
-      printf("RAM Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n\n", total,
+      printf("RAM Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n", total,
              used, total - used);
     } else {
-      printf("RAM Usage: unavailable\n\n");
+      printf("RAM Usage: unavailable\n");
     }
 
+    if (disk_ok == 0) {
+      double disk = disk_used / disk_total * 100.0;
+      double disk_free = disk_total - disk_used;
+      printf("\nDisk Usage: %5.1f%% [", disk);
+      print_bar(disk, 20);
+      printf("]\n");
+      printf("Disk Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n",
+             disk_total, disk_used, disk_free);
+    } else {
+      printf("\nDisk Usage: unavailable\n");
+    }
+
+    printf("\n");
     sleep(1);
   }
   return 0;
