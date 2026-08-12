@@ -69,6 +69,33 @@ int get_ram_usage(double *total, double *used) {
   return 0;
 }
 
+int get_gpu_usage(double *usage, double *used_gb, double *total_gb,
+                  double *temp) {
+  FILE *file = popen(
+      "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,"
+      "temperature.gpu --format=csv,noheader",
+      "r");
+  if (!file)
+    return -1;
+
+  char line[256];
+  int mem_used, mem_total;
+  if (!fgets(line, sizeof(line), file)) {
+    pclose(file);
+    return -1;
+  }
+  pclose(file);
+
+  if (sscanf(line, "%lf %%, %d MiB, %d MiB, %lf", usage, &mem_used,
+             &mem_total, temp) != 4)
+    return -1;
+
+  *used_gb = (double)mem_used / 1024.0;
+  *total_gb = (double)mem_total / 1024.0;
+
+  return 0;
+}
+
 int get_disk_usage(const char *path, double *total, double *used) {
   struct statvfs stat;
 
@@ -84,6 +111,7 @@ int get_disk_usage(const char *path, double *total, double *used) {
 
 int main() {
   double total, used, disk_total, disk_used;
+  double gpu, gpu_used, gpu_total, gpu_temp;
 
   get_cpu_usage();
   sleep(1);
@@ -92,6 +120,7 @@ int main() {
     double cpu = get_cpu_usage();
     int ram_ok = get_ram_usage(&total, &used);
     int disk_ok = get_disk_usage(".", &disk_total, &disk_used);
+    int gpu_ok = get_gpu_usage(&gpu, &gpu_used, &gpu_total, &gpu_temp);
 
     clear_screen();
     printf("System Monitor - Press Ctrl+C to exit\n");
@@ -122,6 +151,16 @@ int main() {
              disk_total, disk_used, disk_free);
     } else {
       printf("\nDisk Usage: unavailable\n");
+    }
+
+    if (gpu_ok == 0) {
+      printf("\nGPU Usage: %5.1f%% [", gpu);
+      print_bar(gpu, 20);
+      printf("]  Temp: %.0f C\n", gpu_temp);
+      printf("GPU Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n",
+             gpu_total, gpu_used, gpu_total - gpu_used);
+    } else {
+      printf("\nGPU Usage: unavailable\n");
     }
 
     printf("\n");
