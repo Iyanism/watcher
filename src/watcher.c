@@ -71,10 +71,10 @@ int get_ram_usage(double *total, double *used) {
 
 int get_gpu_usage(double *usage, double *used_gb, double *total_gb,
                   double *temp) {
-  FILE *file = popen(
-      "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,"
-      "temperature.gpu --format=csv,noheader",
-      "r");
+  FILE *file =
+      popen("nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,"
+            "temperature.gpu --format=csv,noheader",
+            "r");
   if (!file)
     return -1;
 
@@ -86,8 +86,8 @@ int get_gpu_usage(double *usage, double *used_gb, double *total_gb,
   }
   pclose(file);
 
-  if (sscanf(line, "%lf %%, %d MiB, %d MiB, %lf", usage, &mem_used,
-             &mem_total, temp) != 4)
+  if (sscanf(line, "%lf %%, %d MiB, %d MiB, %lf", usage, &mem_used, &mem_total,
+             temp) != 4)
     return -1;
 
   *used_gb = (double)mem_used / 1024.0;
@@ -157,8 +157,8 @@ int main() {
       printf("\nGPU Usage: %5.1f%% [", gpu);
       print_bar(gpu, 20);
       printf("]  Temp: %.0f C\n", gpu_temp);
-      printf("GPU Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n",
-             gpu_total, gpu_used, gpu_total - gpu_used);
+      printf("GPU Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n", gpu_total,
+             gpu_used, gpu_total - gpu_used);
     } else {
       printf("\nGPU Usage: unavailable\n");
     }
