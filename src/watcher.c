@@ -2,6 +2,8 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include "process_monitor.h"
+
 void clear_screen() { printf("\033[2J\033[H"); }
 
 void print_bar(double percent, int width) {
@@ -114,6 +116,7 @@ int main() {
   double gpu, gpu_used, gpu_total, gpu_temp;
 
   get_cpu_usage();
+  process_monitor_init();
   sleep(1);
 
   while (1) {
@@ -121,6 +124,7 @@ int main() {
     int ram_ok = get_ram_usage(&total, &used);
     int disk_ok = get_disk_usage(".", &disk_total, &disk_used);
     int gpu_ok = get_gpu_usage(&gpu, &gpu_used, &gpu_total, &gpu_temp);
+    ProcessList processes;
 
     clear_screen();
     printf("System Monitor - Press Ctrl+C to exit\n");
@@ -161,6 +165,24 @@ int main() {
              gpu_used, gpu_total - gpu_used);
     } else {
       printf("\nGPU Usage: unavailable\n");
+    }
+
+    if (process_monitor_collect(&processes, 20) == 0) {
+      double total_ram_kb = total * 1024 * 1024;
+      printf("\nTop Processes by CPU (Total: %d)\n", processes.total);
+      printf("%7s %-12s %6s %6s %5s %s\n", "PID", "USER", "CPU%", "MEM%",
+             "STATE", "COMMAND");
+
+      for (int i = 0; i < processes.count; i++) {
+        double mem = processes.items[i].mem_kb / total_ram_kb * 100.0;
+        printf("%7d %-12s %6.1f %6.1f %5c %s\n", processes.items[i].pid,
+               processes.items[i].user, processes.items[i].cpu_percent, mem,
+               processes.items[i].state, processes.items[i].name);
+      }
+
+      process_list_free(&processes);
+    } else {
+      printf("\nProcesses: unavailable\n");
     }
 
     printf("\n");
