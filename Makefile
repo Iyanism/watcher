@@ -1,7 +1,7 @@
 CC = cc
 CFLAGS = -Wall -Wextra
 
-SRCS = src/watcher.c src/process_monitor.c
+SRCS = src/watcher.c src/process_monitor.c src/monitor_ui.c
 
 watcher: $(SRCS)
 	$(CC) $(CFLAGS) $(SRCS) -o watcher

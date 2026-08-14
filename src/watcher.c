@@ -1,16 +1,11 @@
 #include <stdio.h>
+#include <string.h>
+#include <sys/sysinfo.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include "monitor_ui.h"
 #include "process_monitor.h"
-
-void clear_screen() { printf("\033[2J\033[H"); }
-
-void print_bar(double percent, int width) {
-  int filled = (int)(percent * width / 100.0);
-  for (int i = 0; i < width; i++)
-    putchar(i < filled ? '#' : '-');
-}
 
 double get_cpu_usage() {
   char buffer[1024];
@@ -111,81 +106,48 @@ int get_disk_usage(const char *path, double *total, double *used) {
   return 0;
 }
 
+void clear_screen() { printf("\033[2J\033[H"); }
+
 int main() {
-  double total, used, disk_total, disk_used;
-  double gpu, gpu_used, gpu_total, gpu_temp;
+  SystemMetric metric;
+  memset(&metric, 0, sizeof(metric));
 
   get_cpu_usage();
   process_monitor_init();
   sleep(1);
 
   while (1) {
-    double cpu = get_cpu_usage();
-    int ram_ok = get_ram_usage(&total, &used);
-    int disk_ok = get_disk_usage(".", &disk_total, &disk_used);
-    int gpu_ok = get_gpu_usage(&gpu, &gpu_used, &gpu_total, &gpu_temp);
+    metric.cpu_percent = get_cpu_usage();
+
+    metric.ram_available =
+        get_ram_usage(&metric.ram_total_gb, &metric.ram_used_gb) == 0;
+    if (metric.ram_available) {
+      metric.ram_free_gb = metric.ram_total_gb - metric.ram_used_gb;
+      metric.ram_percent = metric.ram_used_gb / metric.ram_total_gb * 100.0;
+    }
+
+    metric.disk_available =
+        get_disk_usage(".", &metric.disk_total_gb, &metric.disk_used_gb) == 0;
+    if (metric.disk_available) {
+      metric.disk_free_gb = metric.disk_total_gb - metric.disk_used_gb;
+      metric.disk_percent = metric.disk_used_gb / metric.disk_total_gb * 100.0;
+    }
+
+    metric.gpu_available =
+        get_gpu_usage(&metric.gpu_percent, &metric.gpu_used_gb,
+                      &metric.gpu_total_gb, &metric.gpu_temp_c) == 0;
+
+    struct sysinfo info;
+    if (sysinfo(&info) == 0)
+      metric.uptime_sec = info.uptime;
+
     ProcessList processes;
+    process_monitor_collect(&processes, 20);
 
     clear_screen();
-    printf("System Monitor - Press Ctrl+C to exit\n");
-    printf("====================================\n\n");
+    monitor_render(&metric, &processes);
+    process_list_free(&processes);
 
-    printf("CPU Usage: %5.1f%% [", cpu);
-    print_bar(cpu, 20);
-    printf("]\n");
-
-    if (ram_ok == 0) {
-      double ram = used / total * 100.0;
-      printf("RAM Usage: %5.1f%% [", ram);
-      print_bar(ram, 20);
-      printf("]\n");
-      printf("RAM Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n", total,
-             used, total - used);
-    } else {
-      printf("RAM Usage: unavailable\n");
-    }
-
-    if (disk_ok == 0) {
-      double disk = disk_used / disk_total * 100.0;
-      double disk_free = disk_total - disk_used;
-      printf("\nDisk Usage: %5.1f%% [", disk);
-      print_bar(disk, 20);
-      printf("]\n");
-      printf("Disk Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n",
-             disk_total, disk_used, disk_free);
-    } else {
-      printf("\nDisk Usage: unavailable\n");
-    }
-
-    if (gpu_ok == 0) {
-      printf("\nGPU Usage: %5.1f%% [", gpu);
-      print_bar(gpu, 20);
-      printf("]  Temp: %.0f C\n", gpu_temp);
-      printf("GPU Total: %.2f GB | Used: %.2f GB | Free: %.2f GB\n", gpu_total,
-             gpu_used, gpu_total - gpu_used);
-    } else {
-      printf("\nGPU Usage: unavailable\n");
-    }
-
-    if (process_monitor_collect(&processes, 20) == 0) {
-      double total_ram_kb = total * 1024 * 1024;
-      printf("\nTop Processes by CPU (Total: %d)\n", processes.total);
-      printf("%7s %-12s %6s %6s %5s %s\n", "PID", "USER", "CPU%", "MEM%",
-             "STATE", "COMMAND");
-
-      for (int i = 0; i < processes.count; i++) {
-        double mem = processes.items[i].mem_kb / total_ram_kb * 100.0;
-        printf("%7d %-12s %6.1f %6.1f %5c %s\n", processes.items[i].pid,
-               processes.items[i].user, processes.items[i].cpu_percent, mem,
-               processes.items[i].state, processes.items[i].name);
-      }
-
-      process_list_free(&processes);
-    } else {
-      printf("\nProcesses: unavailable\n");
-    }
-
-    printf("\n");
     sleep(1);
   }
   return 0;
