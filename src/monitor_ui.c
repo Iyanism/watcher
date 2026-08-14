@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include "monitor_ui.h"
+#include "network_monitor.h"
 
 #define CW 76
 #define INNER (CW - 2)
@@ -136,6 +137,22 @@ void monitor_render(const SystemMetric *m, const ProcessList *processes) {
     value_line("GPU", buf);
   } else {
     line("GPU Usage: unavailable");
+  }
+
+  section_rule("Network");
+  if (m->net_available) {
+    char down[32], up[32];
+    format_speed(m->net_rx_bps, down, sizeof(down));
+    format_speed(m->net_tx_bps, up, sizeof(up));
+
+    snprintf(buf, sizeof(buf), "\u2193 %s", down);
+    value_line("Download", buf);
+    snprintf(buf, sizeof(buf), "\u2191 %s", up);
+    value_line("Upload", buf);
+    snprintf(buf, sizeof(buf), "Interface %s", m->net_iface);
+    value_line("Net", buf);
+  } else {
+    line("Network: unavailable");
   }
 
   section_rule("Processes (Top 20 by CPU)");

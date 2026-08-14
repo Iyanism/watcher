@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "monitor_ui.h"
+#include "network_monitor.h"
 #include "process_monitor.h"
 
 double get_cpu_usage() {
@@ -114,6 +115,7 @@ int main() {
 
   get_cpu_usage();
   process_monitor_init();
+  network_monitor_init();
   sleep(1);
 
   while (1) {
@@ -140,6 +142,14 @@ int main() {
     struct sysinfo info;
     if (sysinfo(&info) == 0)
       metric.uptime_sec = info.uptime;
+
+    NetworkSpeed net;
+    metric.net_available = network_monitor_collect(&net) == 0;
+    if (metric.net_available) {
+      metric.net_rx_bps = net.rx_bps;
+      metric.net_tx_bps = net.tx_bps;
+      snprintf(metric.net_iface, sizeof(metric.net_iface), "%s", net.iface);
+    }
 
     ProcessList processes;
     process_monitor_collect(&processes, 20);

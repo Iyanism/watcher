@@ -11,6 +11,9 @@ typedef struct {
   double disk_total_gb, disk_used_gb, disk_free_gb, disk_percent;
   int gpu_available;
   double gpu_percent, gpu_used_gb, gpu_total_gb, gpu_temp_c;
+  int net_available;
+  char net_iface[16];
+  double net_rx_bps, net_tx_bps;
   int uptime_sec;
 } SystemMetric;
 
